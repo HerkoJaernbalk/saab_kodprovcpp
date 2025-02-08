@@ -16,8 +16,10 @@ int main() {
         acceptor.accept(stream.socket(), ec);
         if (!ec)
         {
+            int i=0;
+            std::vector<int> v1{1,2,3,4,5};
             while (true) {
-                if (!(stream << "Hello!" << std::endl)) {
+                if (!(stream << v1 << std::endl)) {
                     std::cerr << "Connection lost!" << std::endl;
                     break;  // Exit the loop if the connection is lost
                 }

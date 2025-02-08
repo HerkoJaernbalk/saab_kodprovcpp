@@ -7,6 +7,8 @@
 #include <string>
 #include <cstdint>
 #include <unordered_map>
+#include <cmath>
+#include <numeric>
 
 #include <asio.hpp>
 
@@ -15,47 +17,108 @@
 
 struct Object
 {
-    Object() : ID(0), X(0), Y(0), type(0) {}
+    Object() : ID(0), X(0), Y(0), type(0){color[0]=color[1]=color[2]=0;}
     Object(int64_t id, int32_t x, int32_t y, uint8_t type_param) : 
-          ID(id), X(x), Y(y), type(type_param) {}
+          ID(id), X(x), Y(y), type(type_param)
+    {
+        color[0]=color[1]=color[2]=0;
+        if (type ==1 || type ==2)
+        {
+            category = 1;
+        }
+        else 
+        {
+            category =2;
+        }
+    }
     int64_t ID;
     int32_t X;
     int32_t Y;
     uint8_t type;
-};
+    uint8_t category;
+    uint8_t color[3];
 
-
-Object parse_line(const std::string& line)
-{
-    std::unordered_map<std::string, std::string> key_value_map;
-
-    // Split the string by semicolons to get key-value pairs
-    std::stringstream ss(line);
-    std::string token;
-    while (std::getline(ss, token, ';'))
+    void set_category()
     {
-        size_t pos = token.find('=');
-        if (pos != std::string::npos)
+        if (type ==1 || type ==2)
         {
-            std::string key = token.substr(0, pos);
-            std::string value = token.substr(pos + 1);
-            key_value_map[key] = value;
+            category = 1;
+        }
+        else 
+        {
+            category =2;
         }
     }
 
-    // Convert the extracted values into the right types
-    int64_t id = std::stoll(key_value_map["ID"]);
-    int32_t x = std::stoi(key_value_map["X"]);
-    int32_t y = std::stoi(key_value_map["Y"]);
-    uint8_t type = static_cast<uint8_t>(std::stoi(key_value_map["TYPE"]));
+    void set_color()
+    {   
+        set_category();
+        int32_t x_ref{150};
+        int32_t y_ref{150};
 
-    // Create and return the Object
+        int32_t dist = std::sqrt((X-x_ref)*(X-x_ref) + (Y - y_ref)*(Y - y_ref));
 
-    std::cout << "object created" << std::endl;
+        // uint8_t RED[3] = {0x5B, 0x31, 0x6D};
+        // uint8_t YELLOW[3] = {0x5B, 0x33, 0x6D};
+        // uint8_t BLUE[3] = {0x5B, 0x34, 0x6D};
+        if(category == 2)
+        {
+            if (dist < 100) // red type3
+            {
+                color[0]=0x5b;
+                color[1]=0x31;
+                color[2]=0x6d; 
+            }
+            else // yellow type3 
+            {
+                color[0]=0x5b;
+                color[1]=0x33;
+                color[2]=0x6D;   
+            }
+        }
+        else if (category == 1)
+        {
+            if (type ==1)
+            {
+                if (dist < 50) // red type1
+                {
+                    color[0]=0x5b;
+                    color[1]=0x31;
+                    color[2]=0x6d;
+                }
+                else if (dist < 75) //yellow type1
+                {
+                    color[0]=0x5b;
+                    color[1]=0x33;
+                    color[2]=0x6D;
+                }
+                else // blue type 1
+                {
+                    color[0]=0x5b;
+                    color[1]=0x34;
+                    color[2]=0x6D;  
+                }
+            }
+            else 
+            {
+                if (dist < 50) // yellow type 2
+                {
+                    color[0]=0x5b;
+                    color[1]=0x33;
+                    color[2]=0x6D;
+                }
+                else
+                {
+                    color[0]=0x5b;
+                    color[1]=0x34;
+                    color[2]=0x6D;  
+                }
+            }
+            
+        }
+    }
+};
 
-
-    return Object(id, x, y, type);
-}
 
 void handle_client()
 {
@@ -82,17 +145,54 @@ int main()
     std::unordered_map<int64_t, Object> tracked_objects;
     asio::ip::tcp::iostream input("localhost", "5463");
 
-    // mycket nonsens här nu bara för att testa. 
+    // mycket nonsens här nu bara för att testa.
 
+    int stop = 0;
+    std::vector<double> speed_check;
     for (std::string str; std::getline(input, str);)
-    {
-        Object temp = parse_line(str);
-        tracked_objects[temp.ID] = temp;
-        std::cout << str << '\n';
-    }
+    {   
+        if (stop++ == 100)
+        {
+            break;
+        }
+        auto start_time = std::chrono::high_resolution_clock::now();
+        Object temp;
 
-    // sen en tråd som hanterar att skriva till Client. 
-    // färgen borde kanske göras när man skriver ut. man lägger på det. 
+        
+        sscanf(str.c_str(), "ID=%lld;X=%d;Y=%d;TYPE=%hhu", &temp.ID, &temp.X, &temp.Y, &temp.type);
+
+        temp.set_color();
+        tracked_objects.insert_or_assign(temp.ID,std::move(temp));
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration = end_time - start_time;
+        speed_check.push_back(duration.count());
+        std::cout << "Time to create and insert in map: " << duration.count() << " seconds\n";
+
+
+
+        std::cout << "color[1]: " <<std::hex << static_cast<int>(temp.color[1]) << " Category " << static_cast<int>(temp.category) << '\n';
+
+
+    }
+    // Lambda to calculate mean
+    double mean = [&speed_check]() -> double {
+        if (speed_check.empty()) {
+            return 0.0;  // or handle the empty case as needed
+        }
+        return std::accumulate(speed_check.begin(), speed_check.end(), 0.0) / speed_check.size();
+    }();
+
+    std::cout << "Mean: " << mean << std::endl;
+
+
+
+// här kan man säkert bara sätta en timer och köra på. 
+// eller köra en thread. 
+// jag antar att man kör 2 thread bara. server interaction och client interaction. 
+// men då behöver man thread safe access till tracked obejcts. 
+// sen en tråd som hanterar att skriva till Client. 
+// färgen borde kanske göras när man skriver ut. man lägger på det. 
 
 
 }
