@@ -19,17 +19,14 @@ struct Object
 };
 
 int main() {
-    asio::ip::tcp::iostream input("localhost", "5463");
+    asio::ip::tcp::iostream input("localhost", "5000");
     for (std::string str; std::getline(input, str);)
     {
         // Object temp;
         // sscanf(str.c_str(), "ID=%lld;X=%d;Y=%d;TYPE=%hhu", &temp.ID, &temp.X, &temp.Y, &temp.type);
         // std::cout << temp.type << '\n';
         //std::this_thread::sleep_for(std::chrono::seconds(1));  // Delay between messages
-        for (char c : str) {
-            std::cout << "Char: " << c << " ASCII: " << static_cast<int>(c);
-        }
-        std::cout << std::endl;
+        std::cout << str <<  std::endl;
 
     }
 }

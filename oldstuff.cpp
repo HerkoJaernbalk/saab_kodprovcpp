@@ -31,3 +31,14 @@ Object parse_line(const std::string& line)
     // skapar skiten
     return Object(id, x, y, type);
 }
+
+
+
+
+// Lambda to calculate mean
+double mean = [&speed_check]() -> double {
+    if (speed_check.empty()) {
+        return 0.0;  // or handle the empty case as needed
+    }
+    return std::accumulate(speed_check.begin(), speed_check.end(), 0.0) / speed_check.size();
+}();
