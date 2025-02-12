@@ -1,5 +1,4 @@
-// g++ -I /Users/henrikjernbeck/Desktop/asio-1.30.2/include example.cpp -o example
-// får väl se till att använda cmake när allt är klart sen.
+
  
 #include <iostream>
 #include <string>
