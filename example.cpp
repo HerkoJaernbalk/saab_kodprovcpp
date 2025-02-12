@@ -7,15 +7,21 @@
 #include <unordered_map>
 #include <cmath>
 #include <numeric>
+#include <bitset>
 
 #include <asio.hpp>
 
 // Hämta data. borde vara något som ständigt bara lyssnar och slänger in varje rad
 // kanske man bara gör en Struct Object.
 
+
+// fin lösning xD. 
+bool CONNECTION_FLAG = true;
+
 struct Object
 {
-    Object() : ID(0), X(0), Y(0), type(0){color[0]=color[1]=color[2]=0; std::cout << "object default contructor called\n";}
+    Object() : ID(0), X(0), Y(0), type(0){color[0]=color[1]=color[2]=0;}
+    // behövs inte.
     Object(int64_t id, int32_t x, int32_t y, uint8_t type_param) : 
           ID(id), X(x), Y(y), type(type_param)
     {
@@ -115,28 +121,17 @@ struct Object
             
         }
     }
+    
+    //struct member function that serialize object. 
+    void serialize(std::ostream &out) const {
+        out.write(reinterpret_cast<const char*>(&ID), sizeof(ID));
+        out.write(reinterpret_cast<const char*>(&X), sizeof(X));
+        out.write(reinterpret_cast<const char*>(&Y), sizeof(Y));
+        out.write(reinterpret_cast<const char*>(&type), sizeof(type));
+        out.write(reinterpret_cast<const char*>(color), sizeof(color));
+    }
 };
 
-
-void handle_client()
-{
-    // får fundera på det här senare, kan börja med att printa ut skiten i terminalen.
-    // något jag hittade i att göra en enkel server på Asio library references.
-    // skal för det som ligger under.
-    asio::io_context io_context;
-    asio::ip::tcp::endpoint endpoint(asio::ip::tcp::v4(), 8080);
-    asio::ip::tcp::acceptor acceptor(io_context, endpoint);
-    for (;;)
-    {
-        asio::ip::tcp::iostream stream;
-        std::error_code ec;
-        acceptor.accept(stream.socket(), ec);
-        if (!ec)
-        {
-            stream << "Test!";
-        }
-    }
-}
 
 
 void read_from_saab(const std::string &ip, const std::string &port, std::unordered_map<int64_t, Object> &tracked_objects, std::mutex &maplock)
@@ -172,10 +167,9 @@ void read_from_saab(const std::string &ip, const std::string &port, std::unorder
                     temp.set_color();
                     {
                         std::scoped_lock lock(maplock);
-                        tracked_objects.insert_or_assign(temp.ID, std::move(temp));
+                        tracked_objects.insert_or_assign(temp.ID, std::move(temp)); // flyttar istället för kopiera!
+                                                                                    // jag är ett geni! och sparar massor med tid. xD 
                     }
-                    std::cout << "color[1]: " << std::hex << static_cast<int>(temp.color[1]) << " Category " 
-                            << static_cast<int>(temp.category) << '\n';
                 }
             }
         }
@@ -186,10 +180,17 @@ void read_from_saab(const std::string &ip, const std::string &port, std::unorder
 
         std::clog << "Connection lost. Retrying...\n";
         retries++;
-        std::this_thread::sleep_for(std::chrono::seconds(1)); // Add delay before retrying
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // vänta lite innan man testar igen 
     }
     std::clog << "Max retries reached. Stopping.\n";
+    // här skulle man sätta connection_flag.
+    CONNECTION_FLAG = false;
 }
+
+//den här var när jag missuppfattade vad jag skulle göra. 
+//jag tänkte att middleware skulle kunna skicka på samma sätt som den tar emot. 
+//Den här gör inget speciellt, hanterar ingen data
+/*
 
 void send_to_client(const int &port, std::unordered_map<int64_t,Object> &tracked_objects, std::mutex &maplock)
 {
@@ -211,16 +212,7 @@ void send_to_client(const int &port, std::unordered_map<int64_t,Object> &tracked
                 // kanske bra så man inte blockar access till mappen för inläsning av ny data. 
                 // men det kansek tar tid att kopiera skiten. 
                 // kanske bara enklare att göra om alla object i mappen till binär data och lägga i en variabel. 
-                std::vector<char> raw;
-                {
-                    std::scoped_lock lock(maplock);
-                    for (const auto &[id, obj] : tracked_objects)
-                    {
-                        // Serialize obj directly to raw buffer
-                    }
-                }
-
-                if (!(stream << "hello" << std::endl)) // send raw here, not "hello"
+                if (!(stream << "hello" << std::endl)) // byt "hello", mot rätt senare. 
                 {
                     std::clog << "Connection lost: " << stream.error().message() << std::endl;
                     break; 
@@ -231,10 +223,10 @@ void send_to_client(const int &port, std::unordered_map<int64_t,Object> &tracked
                 if (stream.fail()) 
                 {
                     std::clog << "Connection error!\n"; 
-                    break;  // Exit the loop on connection error
+                    break;  // hoppa ur och testa igen. 
                 }
 
-                std::this_thread::sleep_for(std::chrono::milliseconds(1670));  // Delay between messages
+                std::this_thread::sleep_for(std::chrono::milliseconds(1670));  // delay
             }
         } else 
         {
@@ -242,6 +234,39 @@ void send_to_client(const int &port, std::unordered_map<int64_t,Object> &tracked
         }
     }
 
+}
+*/
+
+void send_to_client_out(std::unordered_map<int64_t, Object> &tracked_objects, std::mutex &maplock) {
+    std::ostringstream outstream; //behöver fylla den här med data.  
+    
+    while(CONNECTION_FLAG) //.... borde egentligen avsluta den här. om connection lost men jag har trixat till det gör mig.
+                // declare global variable, connection_flag, sätt 0 om max retires. connection_flag =1 om man har/försöker. 
+    {
+        int32_t preamble = 0xFE00;
+        int32_t object_count = static_cast<int32_t>(tracked_objects.size()); //kanske det här inte "thread safe". 
+
+        outstream.write(reinterpret_cast<const char*>(&preamble), sizeof(preamble));
+
+        {
+            //låser mappen. det blockar läsning men kanske inte gör så mycket. 
+            std::scoped_lock lock(maplock);
+            outstream.write(reinterpret_cast<const char*>(&object_count), sizeof(object_count));
+
+            for (const auto &[id, obj] : tracked_objects) {
+                obj.serialize(outstream);
+            }
+        }
+
+        std::string data = outstream.str(); //gör om allt till en string, oklart om det är så det ska vara.
+
+        for (unsigned char c : data) {
+            std::cout << std::bitset<8>(c); //skriver ut som nollor och ettor. ska man verkligen göra så? Det här skriver bitarna: [7,6,5,4,3,2,1,0] big endian blir det.
+        }
+        std::cout << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1670)); //delay
+        //det som kanske är lite märkligt är att man kommer få väldigt lite information första gången. men det kanske inte gör så mycket. 
+    }
 }
 
 int main()
@@ -251,7 +276,7 @@ int main()
     std::mutex mylock;
     // Det här funkar tror jag, men kanske inte är så smart/bra :)
     std::thread t1(read_from_saab, "localhost", "5463", std::ref(tracked_objects), std::ref(mylock));
-    std::thread t2(send_to_client,5000, std::ref(tracked_objects), std::ref(mylock));
+    std::thread t2(send_to_client_out, std::ref(tracked_objects), std::ref(mylock));
     t1.join();
     t2.join();
     return 0;
