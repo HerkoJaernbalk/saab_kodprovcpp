@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include <asio.hpp>
+#include <unordered_set>
 
 // Hämta data. borde vara något som ständigt bara lyssnar och slänger in varje rad
 // kanske man bara gör en Struct Object.
@@ -131,11 +132,27 @@ struct Object
         out.write(reinterpret_cast<const char*>(&type), sizeof(type));
         out.write(reinterpret_cast<const char*>(color), sizeof(color));
     }
+
+    bool operator==(const Object &other) const
+    {
+        return this->ID ==other.ID;
+    }
+
+
+
 };
 
 
+struct ObjectHash
+{
+    std::size_t operator()(const Object &obj) const
+    {
+        return std::hash<int64_t>()(obj.ID);
+    }
+};
 
-void read_from_saab(const std::string &ip, const std::string &port, std::unordered_map<int64_t, Object> &tracked_objects, std::mutex &maplock)
+
+void read_from_saab(const std::string &ip, const std::string &port, std::unordered_set<Object, ObjectHash> &tracked_objects, std::mutex &maplock)
 {
     int retries = 0;
     while (retries < 10) // vi testar att få tillbaka koppling mot server. 
@@ -170,7 +187,11 @@ void read_from_saab(const std::string &ip, const std::string &port, std::unorder
                     temp.set_color();
                     {
                         std::scoped_lock lock(maplock);
-                        tracked_objects.insert_or_assign(temp.ID, std::move(temp)); // flyttar istället för kopiera!
+
+                        tracked_objects.erase(temp);
+                        tracked_objects.insert(std::move(temp));
+
+                        // tracked_objects.insert_or_assign(temp.ID, std::move(temp)); // flyttar istället för kopiera!
                                                                                     // jag är ett geni! och sparar massor med tid. xD 
                     }
                 }
@@ -240,7 +261,7 @@ void send_to_client(const int &port, std::unordered_map<int64_t,Object> &tracked
 }
 */
 
-void send_to_client_out(std::unordered_map<int64_t, Object> &tracked_objects, std::mutex &maplock) {
+void send_to_client_out(std::unordered_set<Object, ObjectHash> &tracked_objects, std::mutex &maplock) {
     std::ostringstream outstream; //behöver fylla den här med data.  
     
     while(CONNECTION_FLAG) //.... borde egentligen avsluta den här. om connection lost men jag har trixat till det gör mig.
@@ -256,7 +277,7 @@ void send_to_client_out(std::unordered_map<int64_t, Object> &tracked_objects, st
             std::scoped_lock lock(maplock);
             outstream.write(reinterpret_cast<const char*>(&object_count), sizeof(object_count));
 
-            for (const auto &[id, obj] : tracked_objects) {
+            for (const auto & obj : tracked_objects) {
                 obj.serialize(outstream);
             }
         }
@@ -273,13 +294,22 @@ void send_to_client_out(std::unordered_map<int64_t, Object> &tracked_objects, st
     }
 }
 
+
+
+
+
 int main()
 {
     //underbart att jag har gjort fel med 3 trådar. en för varje funktion och en för att bara vänta "main". 
     // bör bara starta en tråd för inhämtning och sen köra resten i main :D så slipper man 3 trådar. 
 
     // en map med object. borde funka ok! 
-    std::unordered_map<int64_t, Object> tracked_objects;
+    // std::unordered_map<int64_t, Object> tracked_objects;
+    
+    // testar med set
+    std::unordered_set<Object, ObjectHash> tracked_objects; 
+    
+    
     std::mutex mylock;
     // Det här funkar tror jag, men kanske inte är så smart/bra :)
     std::thread t1(read_from_saab, "localhost", "5463", std::ref(tracked_objects), std::ref(mylock));
