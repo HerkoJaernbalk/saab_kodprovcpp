@@ -1,7 +1,9 @@
 #include <cstdint>
 #include <iostream>
 #include <bitset>
-#include <cmath> 
+#include <cmath>
+#include <inttypes.h> //för att få macros och få bort systemberoendet på sscanf. 
+#include <stdint.h>
 
 
 // det här går ju sådär. 
@@ -116,12 +118,6 @@ struct Object
 
 int main()
 {
-    int32_t preamble = 0xFE00;
-    const char * ptr = reinterpret_cast<const char*>(&preamble);
-    for (int i =0; i< sizeof(preamble);i++)
-    {
-        std::cout << std::bitset<8>(ptr[i]) << std::endl;
-
-    }
-
+    const char* formatStr = "ID=" PRId64 ";X=" PRId32 ";Y=" PRId32 ";TYPE=%hhu";
+    std::cout << formatStr << std::endl;
 }

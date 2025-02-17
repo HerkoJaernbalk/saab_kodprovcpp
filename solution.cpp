@@ -1,5 +1,3 @@
-
- 
 #include <iostream>
 #include <string>
 #include <cstdint>
@@ -7,6 +5,10 @@
 #include <cmath>
 #include <numeric>
 #include <bitset>
+#include <chrono> //lagt till headers
+#include <thread> //lagt till headers
+#include <inttypes.h> //för att få macros och få bort systemberoendet på sscanf. 
+#include <stdint.h>
 
 #include <asio.hpp>
 
@@ -156,7 +158,9 @@ void read_from_saab(const std::string &ip, const std::string &port, std::unorder
                              //men det är så "enkel" struct och constructor så det kanske inte gör så mycket.
                              // man kan ha tillfälliga variabler som man sedan bygger Object från och struntar i default constructorn.
                              // det skulle dock göras efter count == 4.
-                int count = sscanf(str.c_str(), "ID=%lld;X=%d;Y=%d;TYPE=%hhu", &temp.ID, &temp.X, &temp.Y, &temp.type);
+                // fixat till så det är rätt med parsing. Macron tar hand om det så det blir rätt. inkluderas i #include <inttypes.h> 
+                const char* formatStr = "ID=%" PRId64 ";X=%" PRId32 ";Y=%" PRId32 ";TYPE=%hhu";
+                int count = sscanf(str.c_str(), formatStr, &temp.ID, &temp.X, &temp.Y, &temp.type);
                 if (count != 4)
                 {
                     std::clog << "parse error\n";
@@ -263,6 +267,7 @@ void send_to_client_out(std::unordered_map<int64_t, Object> &tracked_objects, st
             std::cout << std::bitset<8>(c); //skriver ut som nollor och ettor. ska man verkligen göra så? Det här skriver bitarna: [7,6,5,4,3,2,1,0] big endian blir det.
         }
         std::cout << std::endl;
+        outstream.str(""); //måste ta bort det som redan ligger där!
         std::this_thread::sleep_for(std::chrono::milliseconds(1670)); //delay
         //det som kanske är lite märkligt är att man kommer få väldigt lite information första gången. men det kanske inte gör så mycket. 
     }
@@ -270,6 +275,9 @@ void send_to_client_out(std::unordered_map<int64_t, Object> &tracked_objects, st
 
 int main()
 {
+    //underbart att jag har gjort fel med 3 trådar. en för varje funktion och en för att bara vänta "main". 
+    // bör bara starta en tråd för inhämtning och sen köra resten i main :D så slipper man 3 trådar. 
+
     // en map med object. borde funka ok! 
     std::unordered_map<int64_t, Object> tracked_objects;
     std::mutex mylock;
