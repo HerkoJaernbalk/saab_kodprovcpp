@@ -283,9 +283,10 @@ int main()
     std::mutex mylock;
     // Det här funkar tror jag, men kanske inte är så smart/bra :)
     std::thread t1(read_from_saab, "localhost", "5463", std::ref(tracked_objects), std::ref(mylock));
-    std::thread t2(send_to_client_out, std::ref(tracked_objects), std::ref(mylock));
+    // std::thread t2(send_to_client_out, std::ref(tracked_objects), std::ref(mylock));
+    send_to_client_out(tracked_objects,mylock);
     t1.join();
-    t2.join();
+    // t2.join();
     return 0;
 
 // här kan man säkert bara sätta en timer och köra på. 
