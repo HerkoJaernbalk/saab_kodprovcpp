@@ -261,12 +261,11 @@ void send_to_client_out(std::unordered_map<int64_t, Object> &tracked_objects, st
             }
         }
 
-        std::string data = outstream.str(); //gör om allt till en string, oklart om det är så det ska vara.
 
-        for (unsigned char c : data) {
-            std::cout << std::bitset<8>(c); //skriver ut som nollor och ettor. ska man verkligen göra så? Det här skriver bitarna: [7,6,5,4,3,2,1,0] big endian blir det.
-        }
-        std::cout << std::endl;
+        //nytt sätt att faktiskt skriva binärt till stdout. 
+        std::cout.write(outstream.str().c_str(),sizeof(outstream.str().c_str()));
+
+
         outstream.str(""); //måste ta bort det som redan ligger där!
         std::this_thread::sleep_for(std::chrono::milliseconds(1670)); //delay
         //det som kanske är lite märkligt är att man kommer få väldigt lite information första gången. men det kanske inte gör så mycket. 
